@@ -87,16 +87,56 @@ const createCmd = new SlashCommandBuilder()
       .setRequired(false)
   );
 
-const commands = [createCmd];
+const channelVisibleCmd = new SlashCommandBuilder()
+.setName('channelvisible')
+.setDescription('Concede permissão de visualização a certos cargos para todos os canais com um nome específico.')
+// Exige permissão de ManageChannels para usar
+.setDefaultMemberPermissions(PermissionFlagsBits.ManageChannels)
+.setDMPermission(false)
+// Opção obrigatória: nome do canal (string)
+.addStringOption(option =>
+  option
+    .setName('channelname')
+    .setDescription('Nome exato do(s) canal(is).')
+    .setRequired(true)
+)
+// Até 5 cargos opcionais
+.addRoleOption(option =>
+  option
+    .setName('cargo1')
+    .setDescription('Cargo que poderá ver os canais (1)')
+    .setRequired(false)
+)
+.addRoleOption(option =>
+  option
+    .setName('cargo2')
+    .setDescription('Cargo que poderá ver os canais (2)')
+    .setRequired(false)
+)
+.addRoleOption(option =>
+  option
+    .setName('cargo3')
+    .setDescription('Cargo que poderá ver os canais (3)')
+    .setRequired(false)
+)
+.addRoleOption(option =>
+  option
+    .setName('cargo4')
+    .setDescription('Cargo que poderá ver os canais (4)')
+    .setRequired(false)
+)
+.addRoleOption(option =>
+  option
+    .setName('cargo5')
+    .setDescription('Cargo que poderá ver os canais (5)')
+    .setRequired(false)
+);
+const commands = [channelVisibleCmd, createCmd];
 
 const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
 
 (async () => {
   try {
-    console.log('Registrando (ou atualizando) os comandos slash...');
-    console.log('CLIENT_ID:', process.env.CLIENT_ID);
-    console.log('GUILD_ID:', process.env.GUILD_ID);
-
     await rest.put(
       Routes.applicationGuildCommands(process.env.CLIENT_ID, process.env.GUILD_ID),
       {
