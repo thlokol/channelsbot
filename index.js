@@ -21,7 +21,6 @@ client.on('interactionCreate', async (interaction) => {
 
   // Verifica se é o comando /create
   if (interaction.commandName === 'create') {
-    console.log('Comando /create recebido!');
     try {
       // 1) Envia um "acknowledge" ao Discord, dizendo que vamos responder depois
       await interaction.deferReply();

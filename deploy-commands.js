@@ -1,10 +1,14 @@
 require('dotenv').config();
-const { REST, Routes, SlashCommandBuilder } = require('discord.js');
+const { REST, Routes, SlashCommandBuilder, PermissionFlagsBits } = require('discord.js');
 
 // Construímos o comando /create
 const createCmd = new SlashCommandBuilder()
   .setName('create')
   .setDescription('Cria uma categoria e canais dentro dela.')
+  // Exige que o usuário tenha a permissão ManageChannels
+  .setDefaultMemberPermissions(PermissionFlagsBits.ManageChannels)
+  // Não pode ser usado em DMs
+  .setDMPermission(false)
   .addStringOption(option =>
     option
       .setName('categoria')
@@ -18,12 +22,8 @@ const createCmd = new SlashCommandBuilder()
       .setRequired(true)
   );
 
-  const pingCmd = new SlashCommandBuilder()
-  .setName('ping')
-  .setDescription('Responde com Pong!');
-
 // Então adicione no array de `commands`:
-const commands = [createCmd, pingCmd];
+const commands = [createCmd];
 
 // Inicializa o REST client
 const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
