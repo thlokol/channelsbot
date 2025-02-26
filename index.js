@@ -1,5 +1,5 @@
 require('dotenv').config();
-const { Client, GatewayIntentBits, ChannelType } = require('discord.js');
+const { Client, GatewayIntentBits, ChannelType, PermissionFlagsBits } = require('discord.js');
 
 const client = new Client({
   intents: [GatewayIntentBits.Guilds],
@@ -10,34 +10,64 @@ client.once('ready', () => {
 });
 
 client.on('interactionCreate', async (interaction) => {
-  // Garante que é um slash command
   if (!interaction.isChatInputCommand()) return;
 
-
-  if (interaction.commandName === 'ping') {
-    // Teste rápido de resposta
-    return interaction.reply('Pong!');
-  }
-
-  // Verifica se é o comando /create
   if (interaction.commandName === 'create') {
     try {
-      // 1) Envia um "acknowledge" ao Discord, dizendo que vamos responder depois
+      // Dá um "ack" ao Discord, prevenindo timeout
       await interaction.deferReply();
 
-      // 2) Pega as opções do comando
+      // Opções básicas
       const categoryName = interaction.options.getString('categoria');
       const channelsString = interaction.options.getString('canais');
-      // Transforma em array
       const channelNames = channelsString.split(' ');
 
-      // 3) Cria a categoria
+      // Lista de cargos selecionados (cargo1..cargo5)
+      const cargos = [];
+      for (let i = 1; i <= 5; i++) {
+        const role = interaction.options.getRole(`cargo${i}`);
+        if (role) cargos.push(role);
+      }
+
+      // Lista de usuários selecionados (user1..user5)
+      const usuarios = [];
+      for (let i = 1; i <= 5; i++) {
+        const user = interaction.options.getUser(`user${i}`);
+        if (user) usuarios.push(user);
+      }
+
+      // Monta permissão: nega a todos (@everyone)
+      const permissionOverwrites = [
+        {
+          id: interaction.guild.id, // @everyone
+          deny: [PermissionFlagsBits.ViewChannel],
+        },
+      ];
+
+      // Libera acesso para cada cargo selecionado
+      cargos.forEach(role => {
+        permissionOverwrites.push({
+          id: role.id,
+          allow: [PermissionFlagsBits.ViewChannel],
+        });
+      });
+
+      // Libera acesso para cada usuário selecionado
+      usuarios.forEach(user => {
+        permissionOverwrites.push({
+          id: user.id,
+          allow: [PermissionFlagsBits.ViewChannel],
+        });
+      });
+
+      // Cria a categoria
       const category = await interaction.guild.channels.create({
         name: categoryName,
         type: ChannelType.GuildCategory,
+        permissionOverwrites,
       });
 
-      // 4) Cria cada canal de texto dentro da categoria
+      // Cria os canais de texto dentro da categoria
       for (const chName of channelNames) {
         await interaction.guild.channels.create({
           name: chName,
@@ -46,22 +76,25 @@ client.on('interactionCreate', async (interaction) => {
         });
       }
 
-      // 5) Agora damos a resposta final (editando a mensagem “deferred”)
+      // Monta uma string para mostrar quem tem acesso
+      const rolesStr = cargos.length
+        ? cargos.map(r => r.name).join(', ')
+        : 'Nenhum';
+      const usersStr = usuarios.length
+        ? usuarios.map(u => u.tag).join(', ')
+        : 'Nenhum';
+
       await interaction.editReply(
-        `Categoria **${categoryName}** criada, com ${channelNames.length} canal(is).`
+        `Categoria **${categoryName}** criada com ${channelNames.length} canal(is).\n`
+        + `Cargo(s) permitidos: ${rolesStr}\n`
+        + `Usuário(s) permitidos: ${usersStr}`
       );
-
     } catch (error) {
-      console.error('Erro ao criar canais/categoria:', error);
-
-      // Se algo falhar depois de deferReply, use editReply para mandar msg de erro
+      console.error('Erro ao criar categoria/canais:', error);
       if (interaction.deferred) {
-        await interaction.editReply(
-          'Ocorreu um erro ao criar a categoria ou canais.'
-        );
+        await interaction.editReply('Ocorreu um erro ao criar a categoria e os canais.');
       } else {
-        // fallback se por algum motivo não tivermos deferido
-        await interaction.reply('Ocorreu um erro ao criar a categoria ou canais.');
+        await interaction.reply('Ocorreu um erro ao criar a categoria e os canais.');
       }
     }
   }

@@ -1,14 +1,15 @@
 require('dotenv').config();
 const { REST, Routes, SlashCommandBuilder, PermissionFlagsBits } = require('discord.js');
 
-// Construímos o comando /create
 const createCmd = new SlashCommandBuilder()
   .setName('create')
   .setDescription('Cria uma categoria e canais dentro dela.')
-  // Exige que o usuário tenha a permissão ManageChannels
+  // Exige permissão de ManageChannels
   .setDefaultMemberPermissions(PermissionFlagsBits.ManageChannels)
-  // Não pode ser usado em DMs
+  // Desabilita para uso em DM
   .setDMPermission(false)
+
+  // Opções obrigatórias
   .addStringOption(option =>
     option
       .setName('categoria')
@@ -20,24 +21,81 @@ const createCmd = new SlashCommandBuilder()
       .setName('canais')
       .setDescription('Nomes dos canais, separados por espaço')
       .setRequired(true)
+  )
+
+  // Até 5 cargos opcionais
+  .addRoleOption(option =>
+    option
+      .setName('cargo1')
+      .setDescription('Cargo que poderá ver a categoria (1)')
+      .setRequired(false)
+  )
+  .addRoleOption(option =>
+    option
+      .setName('cargo2')
+      .setDescription('Cargo que poderá ver a categoria (2)')
+      .setRequired(false)
+  )
+  .addRoleOption(option =>
+    option
+      .setName('cargo3')
+      .setDescription('Cargo que poderá ver a categoria (3)')
+      .setRequired(false)
+  )
+  .addRoleOption(option =>
+    option
+      .setName('cargo4')
+      .setDescription('Cargo que poderá ver a categoria (4)')
+      .setRequired(false)
+  )
+  .addRoleOption(option =>
+    option
+      .setName('cargo5')
+      .setDescription('Cargo que poderá ver a categoria (5)')
+      .setRequired(false)
+  )
+
+  // Até 5 usuários opcionais
+  .addUserOption(option =>
+    option
+      .setName('user1')
+      .setDescription('Usuário que poderá ver a categoria (1)')
+      .setRequired(false)
+  )
+  .addUserOption(option =>
+    option
+      .setName('user2')
+      .setDescription('Usuário que poderá ver a categoria (2)')
+      .setRequired(false)
+  )
+  .addUserOption(option =>
+    option
+      .setName('user3')
+      .setDescription('Usuário que poderá ver a categoria (3)')
+      .setRequired(false)
+  )
+  .addUserOption(option =>
+    option
+      .setName('user4')
+      .setDescription('Usuário que poderá ver a categoria (4)')
+      .setRequired(false)
+  )
+  .addUserOption(option =>
+    option
+      .setName('user5')
+      .setDescription('Usuário que poderá ver a categoria (5)')
+      .setRequired(false)
   );
 
-// Então adicione no array de `commands`:
 const commands = [createCmd];
 
-// Inicializa o REST client
 const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
 
 (async () => {
   try {
     console.log('Registrando (ou atualizando) os comandos slash...');
-
-    // Aqui, vamos registrar os comandos apenas em UMA guild (de teste).
-    // Assim, as mudanças refletem instantaneamente, sem esperar aprovação global.
     console.log('CLIENT_ID:', process.env.CLIENT_ID);
     console.log('GUILD_ID:', process.env.GUILD_ID);
-    console.log('TOKEN (parcial):', process.env.TOKEN?.substring(0, 6), '...');
-
 
     await rest.put(
       Routes.applicationGuildCommands(process.env.CLIENT_ID, process.env.GUILD_ID),
