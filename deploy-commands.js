@@ -1,6 +1,9 @@
 require('dotenv').config();
 const { REST, Routes, SlashCommandBuilder, PermissionFlagsBits } = require('discord.js');
 
+// =========================
+// COMANDO /create
+// =========================
 const createCmd = new SlashCommandBuilder()
   .setName('create')
   .setDescription('Cria uma categoria e canais dentro dela.')
@@ -87,64 +90,75 @@ const createCmd = new SlashCommandBuilder()
       .setRequired(false)
   );
 
+// =========================
+// COMANDO /channelvisible
+// =========================
 const channelVisibleCmd = new SlashCommandBuilder()
-.setName('channelvisible')
-.setDescription('Concede permissão de visualização a certos cargos para todos os canais com um nome específico.')
-// Exige permissão de ManageChannels para usar
-.setDefaultMemberPermissions(PermissionFlagsBits.ManageChannels)
-.setDMPermission(false)
-// Opção obrigatória: nome do canal (string)
-.addStringOption(option =>
-  option
-    .setName('channelname')
-    .setDescription('Nome exato do(s) canal(is).')
-    .setRequired(true)
-)
-// Até 5 cargos opcionais
-.addRoleOption(option =>
-  option
-    .setName('cargo1')
-    .setDescription('Cargo que poderá ver os canais (1)')
-    .setRequired(false)
-)
-.addRoleOption(option =>
-  option
-    .setName('cargo2')
-    .setDescription('Cargo que poderá ver os canais (2)')
-    .setRequired(false)
-)
-.addRoleOption(option =>
-  option
-    .setName('cargo3')
-    .setDescription('Cargo que poderá ver os canais (3)')
-    .setRequired(false)
-)
-.addRoleOption(option =>
-  option
-    .setName('cargo4')
-    .setDescription('Cargo que poderá ver os canais (4)')
-    .setRequired(false)
-)
-.addRoleOption(option =>
-  option
-    .setName('cargo5')
-    .setDescription('Cargo que poderá ver os canais (5)')
-    .setRequired(false)
-);
+  .setName('channelvisible')
+  .setDescription('Concede permissão de visualização a certos cargos para todos os canais com um nome específico.')
+  // Exige permissão de ManageChannels para usar
+  .setDefaultMemberPermissions(PermissionFlagsBits.ManageChannels)
+  .setDMPermission(false)
+  // Opção obrigatória: nome do canal (string)
+  .addStringOption(option =>
+    option
+      .setName('channelname')
+      .setDescription('Nome exato do(s) canal(is).')
+      .setRequired(true)
+  )
+  // Até 5 cargos opcionais
+  .addRoleOption(option =>
+    option
+      .setName('cargo1')
+      .setDescription('Cargo que poderá ver os canais (1)')
+      .setRequired(false)
+  )
+  .addRoleOption(option =>
+    option
+      .setName('cargo2')
+      .setDescription('Cargo que poderá ver os canais (2)')
+      .setRequired(false)
+  )
+  .addRoleOption(option =>
+    option
+      .setName('cargo3')
+      .setDescription('Cargo que poderá ver os canais (3)')
+      .setRequired(false)
+  )
+  .addRoleOption(option =>
+    option
+      .setName('cargo4')
+      .setDescription('Cargo que poderá ver os canais (4)')
+      .setRequired(false)
+  )
+  .addRoleOption(option =>
+    option
+      .setName('cargo5')
+      .setDescription('Cargo que poderá ver os canais (5)')
+      .setRequired(false)
+  );
+
+// =========================
+// REGISTRO GLOBAL
+// =========================
 const commands = [channelVisibleCmd, createCmd];
 
 const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
 
 (async () => {
   try {
+    console.log('Registrando comandos globalmente...');
+
+    // Registra globalmente em todos os servidores onde o bot for adicionado.
     await rest.put(
-      Routes.applicationGuildCommands(process.env.CLIENT_ID, process.env.GUILD_ID),
+      Routes.applicationCommands(process.env.CLIENT_ID),
       {
         body: commands.map(cmd => cmd.toJSON()),
       }
     );
 
-    console.log('Comandos registrados com sucesso!');
+    console.log('Comandos registrados globalmente com sucesso!');
+    console.log('OBS: Pode levar até 1 hora para aparecerem em todos os servidores.');
   } catch (error) {
     console.error('Erro ao registrar comandos:', error);
   }
