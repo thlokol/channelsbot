@@ -9,6 +9,9 @@ const {
 // Armazena as configurações de auto-create por servidor
 const autoCreateConfigs = new Map();
 
+// Armazena as configurações de auto-create-category-clone por servidor
+const autoCategoryCloneConfigs = new Map();
+
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
@@ -481,6 +484,73 @@ client.on('interactionCreate', async (interaction) => {
       }
     }
   }
+
+  // ----------------------------------------------------------------------------
+  // COMANDO /auto-create-category-clone
+  // ----------------------------------------------------------------------------
+  if (interaction.commandName === 'auto-create-category-clone') {
+    try {
+      await interaction.deferReply();
+
+      const categoryModelName = interaction.options.getString('categoria_modelo');
+      const isEnabled = interaction.options.getBoolean('ativar');
+      const accessRole = interaction.options.getRole('cargo_acesso');
+      const prefix = interaction.options.getString('prefixo') || '';
+
+      // Verifica se a categoria modelo existe
+      const categoryModel = interaction.guild.channels.cache.find(
+        ch => ch.type === ChannelType.GuildCategory && ch.name === categoryModelName
+      );
+
+      if (!categoryModel) {
+        await interaction.editReply(`Não encontrei nenhuma categoria chamada "${categoryModelName}".`);
+        return;
+      }
+
+      // Se estiver desativando, remove a configuração
+      if (!isEnabled) {
+        autoCategoryCloneConfigs.delete(interaction.guildId);
+        await interaction.editReply(`Criação automática de categorias para novos membros foi desativada.`);
+        return;
+      }
+
+      // Lista todos os canais da categoria modelo
+      const channelsInCategory = interaction.guild.channels.cache.filter(
+        ch => ch.parentId === categoryModel.id
+      );
+
+      if (!channelsInCategory.size) {
+        await interaction.editReply(`A categoria "${categoryModelName}" não possui canais para serem clonados.`);
+        return;
+      }
+
+      // Salva a configuração
+      const config = {
+        categoryModelId: categoryModel.id,
+        categoryModelName: categoryModelName,
+        accessRoleId: accessRole?.id,
+        prefix: prefix
+      };
+
+      autoCategoryCloneConfigs.set(interaction.guildId, config);
+
+      await interaction.editReply(
+        `Criação automática de categorias configurada:\n` +
+        `• Categoria modelo: ${categoryModelName}\n` +
+        `• Cargo adicional de acesso: ${accessRole ? accessRole.name : 'Nenhum'}\n` +
+        `• Prefixo: ${prefix ? prefix : 'Nenhum'}\n\n` +
+        `Quando um novo membro entrar no servidor, será criada uma categoria com ${channelsInCategory.size} canal(is) baseada no modelo.`
+      );
+
+    } catch (error) {
+      console.error('Erro ao configurar auto-create-category-clone:', error);
+      if (interaction.deferred) {
+        await interaction.editReply('Ocorreu um erro ao configurar a criação automática de categorias.');
+      } else {
+        await interaction.reply('Ocorreu um erro ao configurar a criação automática de categorias.');
+      }
+    }
+  }
 });
 
 // ----------------------------------------------------------------------------
@@ -490,53 +560,111 @@ client.on('interactionCreate', async (interaction) => {
 // Evento: Novo membro
 client.on('guildMemberAdd', async (member) => {
   try {
+    // Verifica configuração de auto-create
     const guildConfigs = autoCreateConfigs.get(member.guild.id);
-    if (!guildConfigs || !guildConfigs.member_join) return;
+    if (guildConfigs && guildConfigs.member_join) {
+      const config = guildConfigs.member_join;
+      const counter = (member.guild.channels.cache
+        .filter(ch => ch.parentId === config.categoryId)
+        .size) + 1;
 
-    const config = guildConfigs.member_join;
-    const counter = (member.guild.channels.cache
-      .filter(ch => ch.parentId === config.categoryId)
-      .size) + 1;
-
-    // Prepara as permissões do canal
-    const permissionOverwrites = [];
-    
-    if (config.isPrivate) {
-      // Nega acesso para @everyone
-      permissionOverwrites.push({
-        id: member.guild.id,
-        deny: [PermissionFlagsBits.ViewChannel],
-      });
-
-      // Permite acesso para o membro
-      permissionOverwrites.push({
-        id: member.id,
-        allow: [PermissionFlagsBits.ViewChannel],
-      });
-
-      // Se tiver cargo de acesso, permite para ele também
-      if (config.accessRoleId) {
+      // Prepara as permissões do canal
+      const permissionOverwrites = [];
+      
+      if (config.isPrivate) {
+        // Nega acesso para @everyone
         permissionOverwrites.push({
-          id: config.accessRoleId,
+          id: member.guild.id,
+          deny: [PermissionFlagsBits.ViewChannel],
+        });
+
+        // Permite acesso para o membro
+        permissionOverwrites.push({
+          id: member.id,
+          allow: [PermissionFlagsBits.ViewChannel],
+        });
+
+        // Se tiver cargo de acesso, permite para ele também
+        if (config.accessRoleId) {
+          permissionOverwrites.push({
+            id: config.accessRoleId,
+            allow: [PermissionFlagsBits.ViewChannel],
+          });
+        }
+      }
+
+      // Cria o canal
+      const channelName = config.namePattern
+        .replace('{name}', member.user.username.toLowerCase())
+        .replace('{n}', counter.toString());
+
+      await member.guild.channels.create({
+        name: channelName,
+        type: ChannelType.GuildText,
+        parent: config.categoryId,
+        permissionOverwrites,
+      });
+    }
+
+    // Verifica configuração de auto-create-category-clone
+    const categoryCloneConfig = autoCategoryCloneConfigs.get(member.guild.id);
+    if (categoryCloneConfig) {
+      // Busca a categoria modelo
+      const categoryModel = member.guild.channels.cache.get(categoryCloneConfig.categoryModelId);
+      if (!categoryModel) return;
+
+      // Prepara as permissões da nova categoria
+      const permissionOverwrites = [
+        // Nega acesso para @everyone
+        {
+          id: member.guild.id,
+          deny: [PermissionFlagsBits.ViewChannel],
+        },
+        // Permite acesso para o membro
+        {
+          id: member.id,
+          allow: [PermissionFlagsBits.ViewChannel],
+        }
+      ];
+
+      // Adiciona permissão para o cargo adicional, se configurado
+      if (categoryCloneConfig.accessRoleId) {
+        permissionOverwrites.push({
+          id: categoryCloneConfig.accessRoleId,
           allow: [PermissionFlagsBits.ViewChannel],
         });
       }
+
+      // Cria a nova categoria com o nome do membro
+      const categoryName = `${categoryCloneConfig.prefix}${member.user.username}`;
+      const newCategory = await member.guild.channels.create({
+        name: categoryName,
+        type: ChannelType.GuildCategory,
+        permissionOverwrites,
+      });
+
+      // Lista todos os canais da categoria modelo
+      const channelsInModel = member.guild.channels.cache.filter(
+        ch => ch.parentId === categoryModel.id
+      );
+
+      // Clona todos os canais da categoria modelo
+      for (const [, channel] of channelsInModel) {
+        await member.guild.channels.create({
+          name: channel.name,
+          type: channel.type,
+          topic: channel.topic,
+          nsfw: channel.nsfw,
+          parent: newCategory.id,
+          // Usa as mesmas permissões da categoria
+          permissionOverwrites: null
+        });
+      }
+
+      console.log(`Categoria "${categoryName}" criada para o membro ${member.user.tag} com ${channelsInModel.size} canais.`);
     }
-
-    // Cria o canal
-    const channelName = config.namePattern
-      .replace('{name}', member.user.username.toLowerCase())
-      .replace('{n}', counter.toString());
-
-    await member.guild.channels.create({
-      name: channelName,
-      type: ChannelType.GuildText,
-      parent: config.categoryId,
-      permissionOverwrites,
-    });
-
   } catch (error) {
-    console.error('Erro ao criar canal automático para novo membro:', error);
+    console.error('Erro ao processar novo membro:', error);
   }
 });
 

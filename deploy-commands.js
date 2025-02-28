@@ -280,9 +280,44 @@ const autoCreateCmd = new SlashCommandBuilder()
   );
 
 // =========================
+// COMANDO /auto-create-category-clone
+// =========================
+const autoCreateCategoryCloneCmd = new SlashCommandBuilder()
+  .setName('auto-create-category-clone')
+  .setDescription('Configura criação automática de categorias para novos membros baseada em uma categoria modelo.')
+  .setDefaultMemberPermissions(PermissionFlagsBits.ManageChannels)
+  .setDMPermission(false)
+  // Opções obrigatórias primeiro
+  .addStringOption(option =>
+    option
+      .setName('categoria_modelo')
+      .setDescription('Nome da categoria que servirá como modelo')
+      .setRequired(true)
+  )
+  .addBooleanOption(option =>
+    option
+      .setName('ativar')
+      .setDescription('Ativar ou desativar a criação automática de categorias')
+      .setRequired(true)
+  )
+  // Depois as opções opcionais
+  .addRoleOption(option =>
+    option
+      .setName('cargo_acesso')
+      .setDescription('Cargo adicional que terá acesso às categorias criadas')
+      .setRequired(false)
+  )
+  .addStringOption(option =>
+    option
+      .setName('prefixo')
+      .setDescription('Prefixo para o nome da categoria (ex: "Área de ")')
+      .setRequired(false)
+  );
+
+// =========================
 // REGISTRO GLOBAL
 // =========================
-const commands = [channelVisibleCmd, createCmd, deleteCategoryCmd, channelRenameCmd, cloneCategoryCmd, autoCreateCmd];
+const commands = [channelVisibleCmd, createCmd, deleteCategoryCmd, channelRenameCmd, cloneCategoryCmd, autoCreateCmd, autoCreateCategoryCloneCmd];
 
 const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
 
