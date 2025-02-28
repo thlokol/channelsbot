@@ -12,7 +12,7 @@ const createCmd = new SlashCommandBuilder()
   // Desabilita para uso em DM
   .setDMPermission(false)
 
-  // Opções obrigatórias
+  // Opções obrigatórias primeiro
   .addStringOption(option =>
     option
       .setName('categoria')
@@ -26,7 +26,7 @@ const createCmd = new SlashCommandBuilder()
       .setRequired(true)
   )
 
-  // Até 5 cargos opcionais
+  // Depois as opções opcionais
   .addRoleOption(option =>
     option
       .setName('cargo1')
@@ -57,8 +57,6 @@ const createCmd = new SlashCommandBuilder()
       .setDescription('Cargo que poderá ver a categoria (5)')
       .setRequired(false)
   )
-
-  // Até 5 usuários opcionais
   .addUserOption(option =>
     option
       .setName('user1')
@@ -99,14 +97,14 @@ const channelVisibleCmd = new SlashCommandBuilder()
   // Exige permissão de ManageChannels para usar
   .setDefaultMemberPermissions(PermissionFlagsBits.ManageChannels)
   .setDMPermission(false)
-  // Opção obrigatória: nome do canal (string)
+  // Opção obrigatória primeiro
   .addStringOption(option =>
     option
       .setName('channelname')
       .setDescription('Nome exato do(s) canal(is).')
       .setRequired(true)
   )
-  // Até 5 cargos opcionais
+  // Depois as opções opcionais
   .addRoleOption(option =>
     option
       .setName('cargo1')
@@ -139,9 +137,152 @@ const channelVisibleCmd = new SlashCommandBuilder()
   );
 
 // =========================
+// COMANDO /delete-category
+// =========================
+const deleteCategoryCmd = new SlashCommandBuilder()
+  .setName('delete-category')
+  .setDescription('Deleta uma categoria e todos os seus canais.')
+  .setDefaultMemberPermissions(PermissionFlagsBits.ManageChannels)
+  .setDMPermission(false)
+  .addStringOption(option =>
+    option
+      .setName('categoria')
+      .setDescription('Nome da categoria que será deletada')
+      .setRequired(true)
+  )
+  .addBooleanOption(option =>
+    option
+      .setName('confirmar')
+      .setDescription('Confirma que deseja deletar a categoria e TODOS os seus canais')
+      .setRequired(true)
+  );
+
+// =========================
+// COMANDO /channel-rename
+// =========================
+const channelRenameCmd = new SlashCommandBuilder()
+  .setName('channel-rename')
+  .setDescription('Renomeia múltiplos canais de uma vez.')
+  .setDefaultMemberPermissions(PermissionFlagsBits.ManageChannels)
+  .setDMPermission(false)
+  // Opções obrigatórias primeiro
+  .addStringOption(option =>
+    option
+      .setName('buscar')
+      .setDescription('Nome ou parte do nome dos canais que deseja renomear')
+      .setRequired(true)
+  )
+  .addStringOption(option =>
+    option
+      .setName('novo_nome')
+      .setDescription('Novo nome para os canais (use {n} para numeração automática)')
+      .setRequired(true)
+  )
+  .addBooleanOption(option =>
+    option
+      .setName('confirmar')
+      .setDescription('Confirma que deseja renomear os canais encontrados')
+      .setRequired(true)
+  )
+  // Depois a opção opcional
+  .addStringOption(option =>
+    option
+      .setName('categoria')
+      .setDescription('Nome da categoria para filtrar (opcional)')
+      .setRequired(false)
+  );
+
+// =========================
+// COMANDO /clone-category
+// =========================
+const cloneCategoryCmd = new SlashCommandBuilder()
+  .setName('clone-category')
+  .setDescription('Clona uma categoria existente com todos os seus canais e permissões.')
+  .setDefaultMemberPermissions(PermissionFlagsBits.ManageChannels)
+  .setDMPermission(false)
+  // Opções obrigatórias primeiro
+  .addStringOption(option =>
+    option
+      .setName('categoria_origem')
+      .setDescription('Nome da categoria que será clonada')
+      .setRequired(true)
+  )
+  .addBooleanOption(option =>
+    option
+      .setName('clonar_permissoes')
+      .setDescription('Clonar as permissões da categoria e canais?')
+      .setRequired(true)
+  )
+  .addBooleanOption(option =>
+    option
+      .setName('confirmar')
+      .setDescription('Confirma que deseja clonar a categoria e seus canais')
+      .setRequired(true)
+  )
+  // Depois a opção opcional
+  .addStringOption(option =>
+    option
+      .setName('categoria_destino')
+      .setDescription('Nome da nova categoria (deixe vazio para adicionar "- Clone" ao nome original)')
+      .setRequired(false)
+  );
+
+// =========================
+// COMANDO /auto-create
+// =========================
+const autoCreateCmd = new SlashCommandBuilder()
+  .setName('auto-create')
+  .setDescription('Configura criação automática de canais baseada em eventos.')
+  .setDefaultMemberPermissions(PermissionFlagsBits.ManageChannels)
+  .setDMPermission(false)
+  // Opções obrigatórias primeiro
+  .addStringOption(option =>
+    option
+      .setName('evento')
+      .setDescription('Evento que dispara a criação do canal')
+      .setRequired(true)
+      .addChoices(
+        { name: 'Novo Membro', value: 'member_join' },
+        { name: 'Novo Cargo', value: 'role_create' },
+        { name: 'Novo Boost', value: 'server_boost' }
+      )
+  )
+  .addStringOption(option =>
+    option
+      .setName('categoria')
+      .setDescription('Nome da categoria onde os canais serão criados')
+      .setRequired(true)
+  )
+  .addStringOption(option =>
+    option
+      .setName('padrao_nome')
+      .setDescription('Padrão do nome do canal. Use {name} para nome do membro/cargo, {n} para número')
+      .setRequired(true)
+  )
+  .addBooleanOption(option =>
+    option
+      .setName('privado')
+      .setDescription('Se o canal deve ser privado (visível apenas para o membro/cargo)')
+      .setRequired(true)
+  )
+  .addBooleanOption(option =>
+    option
+      .setName('ativar')
+      .setDescription('Ativar ou desativar a criação automática')
+      .setRequired(true)
+  )
+  // Depois a opção opcional
+  .addRoleOption(option =>
+    option
+      .setName('cargo_acesso')
+      .setDescription('Cargo que terá acesso ao canal criado')
+      .setRequired(false)
+  );
+
+// =========================
 // REGISTRO GLOBAL
 // =========================
-const commands = [channelVisibleCmd, createCmd];
+const commands = [channelVisibleCmd, createCmd, deleteCategoryCmd, channelRenameCmd, cloneCategoryCmd, autoCreateCmd];
 
 const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
 
