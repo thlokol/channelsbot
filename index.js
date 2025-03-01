@@ -12,6 +12,9 @@ const autoCreateConfigs = new Map();
 // Armazena as configurações de auto-create-category-clone por servidor
 const autoCategoryCloneConfigs = new Map();
 
+// Armazena as configurações de auto-channel-access por servidor
+const autoChannelAccessConfigs = new Map();
+
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
@@ -197,7 +200,8 @@ client.on('interactionCreate', async (interaction) => {
       const confirmDelete = interaction.options.getBoolean('confirmar');
 
       if (!confirmDelete) {
-        await interaction.editReply('Operação cancelada. Você precisa confirmar a exclusão marcando a opção "confirmar".');
+        await interaction.editReply('Operação cancelada. Você precisa confirmar a exclusão marcando a opção "confirmar".')
+          .catch(error => console.error('Erro ao responder interação (timeout):', error));
         return;
       }
 
@@ -207,7 +211,8 @@ client.on('interactionCreate', async (interaction) => {
       );
 
       if (!category) {
-        await interaction.editReply(`Não encontrei nenhuma categoria chamada "${categoryName}".`);
+        await interaction.editReply(`Não encontrei nenhuma categoria chamada "${categoryName}".`)
+          .catch(error => console.error('Erro ao responder interação (timeout):', error));
         return;
       }
 
@@ -226,14 +231,23 @@ client.on('interactionCreate', async (interaction) => {
 
       await interaction.editReply(
         `Categoria **${categoryName}** e seus ${channelsInCategory.size} canal(is) foram deletados com sucesso.`
-      );
+      ).catch(error => {
+        // Se a interação expirou, apenas registramos no console em vez de crashar
+        console.error('Erro ao responder interação após deletar categoria (provavelmente timeout):', error.code);
+      });
 
     } catch (error) {
       console.error('Erro ao deletar categoria:', error);
-      if (interaction.deferred) {
-        await interaction.editReply('Ocorreu um erro ao deletar a categoria e seus canais.');
-      } else {
-        await interaction.reply('Ocorreu um erro ao deletar a categoria e seus canais.');
+      try {
+        if (interaction.deferred) {
+          await interaction.editReply('Ocorreu um erro ao deletar a categoria e seus canais.')
+            .catch(replyError => console.error('Erro ao responder após falha (timeout):', replyError.code));
+        } else {
+          await interaction.reply('Ocorreu um erro ao deletar a categoria e seus canais.')
+            .catch(replyError => console.error('Erro ao responder após falha (timeout):', replyError.code));
+        }
+      } catch (finalError) {
+        console.error('Erro crítico ao responder interação:', finalError);
       }
     }
   }
@@ -551,6 +565,107 @@ client.on('interactionCreate', async (interaction) => {
       }
     }
   }
+
+  // ----------------------------------------------------------------------------
+  // COMANDO /auto-channel-access
+  // ----------------------------------------------------------------------------
+  if (interaction.commandName === 'auto-channel-access') {
+    try {
+      await interaction.deferReply();
+
+      const pattern = interaction.options.getString('padrao_nome');
+      const role = interaction.options.getRole('cargo');
+      const categoryName = interaction.options.getString('categoria');
+      const isEnabled = interaction.options.getBoolean('ativar');
+
+      // Verifica a categoria, se informada
+      let categoryId = null;
+      if (categoryName) {
+        const category = interaction.guild.channels.cache.find(
+          ch => ch.type === ChannelType.GuildCategory && ch.name === categoryName
+        );
+
+        if (!category) {
+          await interaction.editReply(`Não encontrei nenhuma categoria chamada "${categoryName}".`)
+            .catch(error => console.error('Erro ao responder interação (timeout):', error));
+          return;
+        }
+        categoryId = category.id;
+      }
+
+      // Se estiver desativando
+      if (!isEnabled) {
+        // Obtém as configurações existentes para o servidor
+        const guildConfigs = autoChannelAccessConfigs.get(interaction.guildId) || [];
+        
+        // Remove configurações com o mesmo padrão e categoria
+        const updatedConfigs = guildConfigs.filter(
+          config => config.pattern !== pattern || config.categoryId !== categoryId
+        );
+        
+        if (updatedConfigs.length === 0) {
+          // Se não há mais configurações, remove a entrada do servidor
+          autoChannelAccessConfigs.delete(interaction.guildId);
+        } else {
+          // Atualiza as configurações
+          autoChannelAccessConfigs.set(interaction.guildId, updatedConfigs);
+        }
+
+        await interaction.editReply(
+          `Acesso automático para canais com padrão "${pattern}" ${categoryName ? `na categoria "${categoryName}" ` : ''}foi desativado.`
+        ).catch(error => console.error('Erro ao responder interação (timeout):', error));
+        return;
+      }
+
+      // Configuração a ser salva
+      const newConfig = {
+        pattern,
+        roleId: role.id,
+        categoryId
+      };
+
+      // Obtém ou cria a lista de configurações para o servidor
+      const guildConfigs = autoChannelAccessConfigs.get(interaction.guildId) || [];
+      
+      // Verifica se já existe uma configuração com o mesmo padrão e categoria
+      const existingConfigIndex = guildConfigs.findIndex(
+        config => config.pattern === pattern && config.categoryId === categoryId
+      );
+
+      if (existingConfigIndex >= 0) {
+        // Atualiza a configuração existente
+        guildConfigs[existingConfigIndex] = newConfig;
+      } else {
+        // Adiciona a nova configuração
+        guildConfigs.push(newConfig);
+      }
+
+      // Salva a configuração
+      autoChannelAccessConfigs.set(interaction.guildId, guildConfigs);
+
+      await interaction.editReply(
+        `Acesso automático configurado:\n` +
+        `• Padrão de nome: ${pattern}\n` +
+        `• Cargo: ${role.name}\n` +
+        `• Categoria: ${categoryName || 'Todas as categorias'}\n\n` +
+        `Quando novos canais forem criados com o padrão especificado, o cargo ${role.name} receberá automaticamente permissão de visualização.`
+      ).catch(error => console.error('Erro ao responder interação (timeout):', error));
+
+    } catch (error) {
+      console.error('Erro ao configurar auto-channel-access:', error);
+      try {
+        if (interaction.deferred) {
+          await interaction.editReply('Ocorreu um erro ao configurar o acesso automático a canais.')
+            .catch(replyError => console.error('Erro ao responder após falha (timeout):', replyError.code));
+        } else {
+          await interaction.reply('Ocorreu um erro ao configurar o acesso automático a canais.')
+            .catch(replyError => console.error('Erro ao responder após falha (timeout):', replyError.code));
+        }
+      } catch (finalError) {
+        console.error('Erro crítico ao responder interação:', finalError);
+      }
+    }
+  }
 });
 
 // ----------------------------------------------------------------------------
@@ -775,6 +890,47 @@ client.on('guildMemberUpdate', async (oldMember, newMember) => {
 
   } catch (error) {
     console.error('Erro ao criar canal automático para novo boost:', error);
+  }
+});
+
+// ----------------------------------------------------------------------------
+// EVENTO: CRIAÇÃO DE CANAL
+// ----------------------------------------------------------------------------
+client.on('channelCreate', async (channel) => {
+  try {
+    // Verifica se é um canal de texto
+    if (channel.type !== ChannelType.GuildText) return;
+    
+    // Verifica se há configurações para o servidor
+    const guildConfigs = autoChannelAccessConfigs.get(channel.guild.id);
+    if (!guildConfigs || !guildConfigs.length) return;
+
+    // Filtra as configurações aplicáveis a este canal
+    const applicableConfigs = guildConfigs.filter(config => {
+      // Verifica se está na categoria correta (se uma categoria foi especificada)
+      if (config.categoryId && channel.parentId !== config.categoryId) {
+        return false;
+      }
+      
+      // Verifica se o nome do canal corresponde ao padrão
+      return channel.name.includes(config.pattern);
+    });
+
+    // Para cada configuração aplicável, concede o acesso
+    for (const config of applicableConfigs) {
+      // Encontra o cargo
+      const role = channel.guild.roles.cache.get(config.roleId);
+      if (!role) continue;
+
+      // Concede acesso ao cargo
+      await channel.permissionOverwrites.edit(role.id, {
+        ViewChannel: true
+      });
+
+      console.log(`Canal #${channel.name} criado: Acesso automático concedido para o cargo ${role.name}`);
+    }
+  } catch (error) {
+    console.error('Erro ao processar canal recém-criado:', error);
   }
 });
 

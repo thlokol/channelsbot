@@ -315,9 +315,44 @@ const autoCreateCategoryCloneCmd = new SlashCommandBuilder()
   );
 
 // =========================
+// COMANDO /auto-channel-access
+// =========================
+const autoChannelAccessCmd = new SlashCommandBuilder()
+  .setName('auto-channel-access')
+  .setDescription('Configura acesso automático a cargos para canais criados com nomes específicos.')
+  .setDefaultMemberPermissions(PermissionFlagsBits.ManageChannels)
+  .setDMPermission(false)
+  // Opções obrigatórias primeiro
+  .addStringOption(option =>
+    option
+      .setName('padrao_nome')
+      .setDescription('Nome ou padrão de nome do canal (ex: "suporte-" para todos que começam com "suporte-")')
+      .setRequired(true)
+  )
+  .addRoleOption(option =>
+    option
+      .setName('cargo')
+      .setDescription('Cargo que receberá acesso automático aos canais')
+      .setRequired(true)
+  )
+  .addBooleanOption(option =>
+    option
+      .setName('ativar')
+      .setDescription('Ativar ou desativar o acesso automático')
+      .setRequired(true)
+  )
+  // Depois as opções opcionais
+  .addStringOption(option =>
+    option
+      .setName('categoria')
+      .setDescription('Nome da categoria onde a regra se aplica (opcional)')
+      .setRequired(false)
+  );
+
+// =========================
 // REGISTRO GLOBAL
 // =========================
-const commands = [channelVisibleCmd, createCmd, deleteCategoryCmd, channelRenameCmd, cloneCategoryCmd, autoCreateCmd, autoCreateCategoryCloneCmd];
+const commands = [channelVisibleCmd, createCmd, deleteCategoryCmd, channelRenameCmd, cloneCategoryCmd, autoCreateCmd, autoCreateCategoryCloneCmd, autoChannelAccessCmd];
 
 const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
 
