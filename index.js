@@ -728,26 +728,57 @@ client.on('guildMemberAdd', async (member) => {
       const categoryModel = member.guild.channels.cache.get(categoryCloneConfig.categoryModelId);
       if (!categoryModel) return;
 
+      // Clona as permissões da categoria modelo
+      const modelPermissions = categoryModel.permissionOverwrites.cache.toJSON();
+      
       // Prepara as permissões da nova categoria
-      const permissionOverwrites = [
-        // Nega acesso para @everyone
-        {
+      const permissionOverwrites = [...modelPermissions];
+
+      // Garante que o @everyone não tenha acesso (substitui a permissão existente se já existir)
+      const everyoneIndex = permissionOverwrites.findIndex(perm => perm.id === member.guild.id);
+      if (everyoneIndex >= 0) {
+        permissionOverwrites[everyoneIndex] = {
+          id: member.guild.id,
+          deny: [...(permissionOverwrites[everyoneIndex].deny || []), PermissionFlagsBits.ViewChannel],
+          allow: permissionOverwrites[everyoneIndex].allow || []
+        };
+      } else {
+        permissionOverwrites.push({
           id: member.guild.id,
           deny: [PermissionFlagsBits.ViewChannel],
-        },
-        // Permite acesso para o membro
-        {
+        });
+      }
+
+      // Garante que o novo membro tenha acesso
+      const memberIndex = permissionOverwrites.findIndex(perm => perm.id === member.id);
+      if (memberIndex >= 0) {
+        permissionOverwrites[memberIndex] = {
+          id: member.id,
+          allow: [...(permissionOverwrites[memberIndex].allow || []), PermissionFlagsBits.ViewChannel],
+          deny: permissionOverwrites[memberIndex].deny || []
+        };
+      } else {
+        permissionOverwrites.push({
           id: member.id,
           allow: [PermissionFlagsBits.ViewChannel],
-        }
-      ];
-
-      // Adiciona permissão para o cargo adicional, se configurado
-      if (categoryCloneConfig.accessRoleId) {
-        permissionOverwrites.push({
-          id: categoryCloneConfig.accessRoleId,
-          allow: [PermissionFlagsBits.ViewChannel],
         });
+      }
+
+      // Garante que o cargo adicional tenha acesso, se configurado
+      if (categoryCloneConfig.accessRoleId) {
+        const roleIndex = permissionOverwrites.findIndex(perm => perm.id === categoryCloneConfig.accessRoleId);
+        if (roleIndex >= 0) {
+          permissionOverwrites[roleIndex] = {
+            id: categoryCloneConfig.accessRoleId,
+            allow: [...(permissionOverwrites[roleIndex].allow || []), PermissionFlagsBits.ViewChannel],
+            deny: permissionOverwrites[roleIndex].deny || []
+          };
+        } else {
+          permissionOverwrites.push({
+            id: categoryCloneConfig.accessRoleId,
+            allow: [PermissionFlagsBits.ViewChannel],
+          });
+        }
       }
 
       // Cria a nova categoria com o nome do membro
@@ -763,16 +794,53 @@ client.on('guildMemberAdd', async (member) => {
         ch => ch.parentId === categoryModel.id
       );
 
-      // Clona todos os canais da categoria modelo
+      // Clona todos os canais da categoria modelo, junto com suas permissões específicas
       for (const [, channel] of channelsInModel) {
+        // Obtém as permissões específicas do canal modelo
+        const channelPermissions = channel.permissionOverwrites.cache.toJSON();
+        
+        // Adiciona garantia de que o novo membro e o cargo de acesso terão permissão
+        const channelPermissionOverwrites = [...channelPermissions];
+        
+        // Garante que o novo membro tenha acesso ao canal
+        const memberChannelIndex = channelPermissionOverwrites.findIndex(perm => perm.id === member.id);
+        if (memberChannelIndex >= 0) {
+          channelPermissionOverwrites[memberChannelIndex] = {
+            id: member.id,
+            allow: [...(channelPermissionOverwrites[memberChannelIndex].allow || []), PermissionFlagsBits.ViewChannel],
+            deny: channelPermissionOverwrites[memberChannelIndex].deny || []
+          };
+        } else {
+          channelPermissionOverwrites.push({
+            id: member.id,
+            allow: [PermissionFlagsBits.ViewChannel],
+          });
+        }
+        
+        // Adiciona o cargo de acesso ao canal, se configurado
+        if (categoryCloneConfig.accessRoleId) {
+          const roleChannelIndex = channelPermissionOverwrites.findIndex(perm => perm.id === categoryCloneConfig.accessRoleId);
+          if (roleChannelIndex >= 0) {
+            channelPermissionOverwrites[roleChannelIndex] = {
+              id: categoryCloneConfig.accessRoleId,
+              allow: [...(channelPermissionOverwrites[roleChannelIndex].allow || []), PermissionFlagsBits.ViewChannel],
+              deny: channelPermissionOverwrites[roleChannelIndex].deny || []
+            };
+          } else {
+            channelPermissionOverwrites.push({
+              id: categoryCloneConfig.accessRoleId,
+              allow: [PermissionFlagsBits.ViewChannel],
+            });
+          }
+        }
+        
         await member.guild.channels.create({
           name: channel.name,
           type: channel.type,
           topic: channel.topic,
           nsfw: channel.nsfw,
           parent: newCategory.id,
-          // Usa as mesmas permissões da categoria
-          permissionOverwrites: null
+          permissionOverwrites: channelPermissionOverwrites
         });
       }
 
