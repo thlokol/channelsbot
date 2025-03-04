@@ -350,9 +350,30 @@ const autoChannelAccessCmd = new SlashCommandBuilder()
   );
 
 // =========================
+// COMANDO /auto-role
+// =========================
+const autoRoleCmd = new SlashCommandBuilder()
+  .setName('auto-role')
+  .setDescription('Configura cargo automático para novos membros')
+  .setDefaultMemberPermissions(PermissionFlagsBits.ManageRoles)
+  .setDMPermission(false)
+  .addRoleOption(option =>
+    option
+      .setName('cargo')
+      .setDescription('Cargo que será atribuído aos novos membros')
+      .setRequired(true)
+  )
+  .addBooleanOption(option =>
+    option
+      .setName('ativar')
+      .setDescription('Ativar ou desativar a funcionalidade')
+      .setRequired(true)
+  );
+
+// =========================
 // REGISTRO GLOBAL
 // =========================
-const commands = [channelVisibleCmd, createCmd, deleteCategoryCmd, channelRenameCmd, cloneCategoryCmd, autoCreateCmd, autoCreateCategoryCloneCmd, autoChannelAccessCmd];
+const commands = [channelVisibleCmd, createCmd, deleteCategoryCmd, channelRenameCmd, cloneCategoryCmd, autoCreateCmd, autoCreateCategoryCloneCmd, autoChannelAccessCmd, autoRoleCmd];
 
 const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
 

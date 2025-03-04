@@ -15,6 +15,9 @@ const autoCategoryCloneConfigs = new Map();
 // Armazena as configurações de auto-channel-access por servidor
 const autoChannelAccessConfigs = new Map();
 
+// Armazena as configurações de auto-role por servidor
+const autoRoleConfigs = new Map();
+
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
@@ -567,6 +570,66 @@ client.on('interactionCreate', async (interaction) => {
   }
 
   // ----------------------------------------------------------------------------
+  // COMANDO /auto-role
+  // ----------------------------------------------------------------------------
+  if (interaction.commandName === 'auto-role') {
+    try {
+      await interaction.deferReply();
+
+      const role = interaction.options.getRole('cargo');
+      const isEnabled = interaction.options.getBoolean('ativar');
+
+      // Verifica permissões do bot
+      if (!interaction.guild.members.me.permissions.has(PermissionFlagsBits.ManageRoles)) {
+        await interaction.editReply('Não tenho permissão para gerenciar cargos neste servidor.')
+          .catch(error => console.error('Erro ao responder interação (timeout):', error));
+        return;
+      }
+
+      // Verifica se o cargo pode ser atribuído pelo bot (comparando posições)
+      if (role.position >= interaction.guild.members.me.roles.highest.position) {
+        await interaction.editReply(
+          `Não posso atribuir o cargo ${role.name} pois ele está acima ou na mesma posição que meu cargo mais alto.`
+        ).catch(error => console.error('Erro ao responder interação (timeout):', error));
+        return;
+      }
+
+      // Se estiver desativando
+      if (!isEnabled) {
+        autoRoleConfigs.delete(interaction.guildId);
+        await interaction.editReply(`Atribuição automática de cargo para novos membros foi desativada.`)
+          .catch(error => console.error('Erro ao responder interação (timeout):', error));
+        return;
+      }
+
+      // Salva a configuração
+      autoRoleConfigs.set(interaction.guildId, {
+        roleId: role.id
+      });
+
+      await interaction.editReply(
+        `Atribuição automática de cargo configurada:\n` +
+        `• Cargo: ${role.name}\n\n` +
+        `Todos os novos membros que entrarem no servidor receberão automaticamente o cargo ${role.name}.`
+      ).catch(error => console.error('Erro ao responder interação (timeout):', error));
+
+    } catch (error) {
+      console.error('Erro ao configurar auto-role:', error);
+      try {
+        if (interaction.deferred) {
+          await interaction.editReply('Ocorreu um erro ao configurar a atribuição automática de cargo.')
+            .catch(replyError => console.error('Erro ao responder após falha (timeout):', replyError.code));
+        } else {
+          await interaction.reply('Ocorreu um erro ao configurar a atribuição automática de cargo.')
+            .catch(replyError => console.error('Erro ao responder após falha (timeout):', replyError.code));
+        }
+      } catch (finalError) {
+        console.error('Erro crítico ao responder interação:', finalError);
+      }
+    }
+  }
+
+  // ----------------------------------------------------------------------------
   // COMANDO /auto-channel-access
   // ----------------------------------------------------------------------------
   if (interaction.commandName === 'auto-channel-access') {
@@ -669,12 +732,24 @@ client.on('interactionCreate', async (interaction) => {
 });
 
 // ----------------------------------------------------------------------------
-// EVENTOS DE AUTO-CREATE
+// EVENTO: NOVO MEMBRO
 // ----------------------------------------------------------------------------
-
-// Evento: Novo membro
 client.on('guildMemberAdd', async (member) => {
   try {
+    // Verifica a configuração de auto-role para este servidor
+    const autoRoleConfig = autoRoleConfigs.get(member.guild.id);
+    if (autoRoleConfig) {
+      try {
+        const role = member.guild.roles.cache.get(autoRoleConfig.roleId);
+        if (role) {
+          await member.roles.add(role);
+          console.log(`Cargo "${role.name}" adicionado automaticamente ao novo membro ${member.user.tag}.`);
+        }
+      } catch (roleError) {
+        console.error(`Erro ao adicionar cargo automático ao membro ${member.user.tag}:`, roleError);
+      }
+    }
+
     // Verifica configuração de auto-create
     const guildConfigs = autoCreateConfigs.get(member.guild.id);
     if (guildConfigs && guildConfigs.member_join) {
