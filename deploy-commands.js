@@ -371,9 +371,18 @@ const autoRoleCmd = new SlashCommandBuilder()
   );
 
 // =========================
+// COMANDO /view-configs
+// =========================
+const viewConfigsCmd = new SlashCommandBuilder()
+  .setName('view-configs')
+  .setDescription('Visualiza todas as configurações ativas do servidor')
+  .setDefaultMemberPermissions(PermissionFlagsBits.ManageChannels)
+  .setDMPermission(false);
+
+// =========================
 // REGISTRO GLOBAL
 // =========================
-const commands = [channelVisibleCmd, createCmd, deleteCategoryCmd, channelRenameCmd, cloneCategoryCmd, autoCreateCmd, autoCreateCategoryCloneCmd, autoChannelAccessCmd, autoRoleCmd];
+const commands = [channelVisibleCmd, createCmd, deleteCategoryCmd, channelRenameCmd, cloneCategoryCmd, autoCreateCmd, autoCreateCategoryCloneCmd, autoChannelAccessCmd, autoRoleCmd, viewConfigsCmd];
 
 const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
 

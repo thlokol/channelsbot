@@ -5,6 +5,70 @@ const {
   ChannelType,
   PermissionFlagsBits,
 } = require('discord.js');
+const fs = require('fs').promises;
+const path = require('path');
+
+// Arquivo de configurações
+const CONFIG_FILE = path.join(__dirname, 'bot-configs.json');
+
+// Função para carregar configurações do arquivo
+async function loadConfigs() {
+  try {
+    const data = await fs.readFile(CONFIG_FILE, 'utf8');
+    const configs = JSON.parse(data);
+    
+    // Restaura as configurações nos Maps
+    if (configs.autoCreateConfigs) {
+      configs.autoCreateConfigs.forEach(([key, value]) => {
+        autoCreateConfigs.set(key, value);
+      });
+    }
+    
+    if (configs.autoCategoryCloneConfigs) {
+      configs.autoCategoryCloneConfigs.forEach(([key, value]) => {
+        autoCategoryCloneConfigs.set(key, value);
+      });
+    }
+    
+    if (configs.autoChannelAccessConfigs) {
+      configs.autoChannelAccessConfigs.forEach(([key, value]) => {
+        autoChannelAccessConfigs.set(key, value);
+      });
+    }
+    
+    if (configs.autoRoleConfigs) {
+      configs.autoRoleConfigs.forEach(([key, value]) => {
+        autoRoleConfigs.set(key, value);
+      });
+    }
+    
+    console.log('Configurações carregadas com sucesso!');
+  } catch (error) {
+    if (error.code === 'ENOENT') {
+      console.log('Arquivo de configurações não encontrado. Criando um novo...');
+      await saveConfigs();
+    } else {
+      console.error('Erro ao carregar configurações:', error);
+    }
+  }
+}
+
+// Função para salvar configurações no arquivo
+async function saveConfigs() {
+  try {
+    const configs = {
+      autoCreateConfigs: Array.from(autoCreateConfigs.entries()),
+      autoCategoryCloneConfigs: Array.from(autoCategoryCloneConfigs.entries()),
+      autoChannelAccessConfigs: Array.from(autoChannelAccessConfigs.entries()),
+      autoRoleConfigs: Array.from(autoRoleConfigs.entries()),
+    };
+    
+    await fs.writeFile(CONFIG_FILE, JSON.stringify(configs, null, 2));
+    console.log('Configurações salvas com sucesso!');
+  } catch (error) {
+    console.error('Erro ao salvar configurações:', error);
+  }
+}
 
 // Armazena as configurações de auto-create por servidor
 const autoCreateConfigs = new Map();
@@ -25,8 +89,11 @@ const client = new Client({
   ],
 });
 
-client.once('ready', () => {
+client.once('ready', async () => {
   console.log(`Bot conectado como ${client.user.tag}`);
+  
+  // Carrega as configurações salvas
+  await loadConfigs();
 });
 
 client.on('interactionCreate', async (interaction) => {
@@ -467,6 +534,9 @@ client.on('interactionCreate', async (interaction) => {
           autoCreateConfigs.set(interaction.guildId, guildConfigs);
         }
 
+        // Salva as configurações no arquivo
+        await saveConfigs();
+
         await interaction.editReply(`Criação automática para o evento "${evento}" foi desativada.`);
         return;
       }
@@ -482,6 +552,9 @@ client.on('interactionCreate', async (interaction) => {
       const guildConfigs = autoCreateConfigs.get(interaction.guildId) || {};
       guildConfigs[evento] = config;
       autoCreateConfigs.set(interaction.guildId, guildConfigs);
+
+      // Salva as configurações no arquivo
+      await saveConfigs();
 
       await interaction.editReply(
         `Criação automática configurada:\n` +
@@ -527,6 +600,10 @@ client.on('interactionCreate', async (interaction) => {
       // Se estiver desativando, remove a configuração
       if (!isEnabled) {
         autoCategoryCloneConfigs.delete(interaction.guildId);
+        
+        // Salva as configurações no arquivo
+        await saveConfigs();
+        
         await interaction.editReply(`Criação automática de categorias para novos membros foi desativada.`);
         return;
       }
@@ -550,6 +627,9 @@ client.on('interactionCreate', async (interaction) => {
       };
 
       autoCategoryCloneConfigs.set(interaction.guildId, config);
+
+      // Salva as configurações no arquivo
+      await saveConfigs();
 
       await interaction.editReply(
         `Criação automática de categorias configurada:\n` +
@@ -597,6 +677,10 @@ client.on('interactionCreate', async (interaction) => {
       // Se estiver desativando
       if (!isEnabled) {
         autoRoleConfigs.delete(interaction.guildId);
+        
+        // Salva as configurações no arquivo
+        await saveConfigs();
+        
         await interaction.editReply(`Atribuição automática de cargo para novos membros foi desativada.`)
           .catch(error => console.error('Erro ao responder interação (timeout):', error));
         return;
@@ -606,6 +690,9 @@ client.on('interactionCreate', async (interaction) => {
       autoRoleConfigs.set(interaction.guildId, {
         roleId: role.id
       });
+
+      // Salva as configurações no arquivo
+      await saveConfigs();
 
       await interaction.editReply(
         `Atribuição automática de cargo configurada:\n` +
@@ -674,6 +761,9 @@ client.on('interactionCreate', async (interaction) => {
           autoChannelAccessConfigs.set(interaction.guildId, updatedConfigs);
         }
 
+        // Salva as configurações no arquivo
+        await saveConfigs();
+
         await interaction.editReply(
           `Acesso automático para canais com padrão "${pattern}" ${categoryName ? `na categoria "${categoryName}" ` : ''}foi desativado.`
         ).catch(error => console.error('Erro ao responder interação (timeout):', error));
@@ -706,6 +796,9 @@ client.on('interactionCreate', async (interaction) => {
       // Salva a configuração
       autoChannelAccessConfigs.set(interaction.guildId, guildConfigs);
 
+      // Salva as configurações no arquivo
+      await saveConfigs();
+
       await interaction.editReply(
         `Acesso automático configurado:\n` +
         `• Padrão de nome: ${pattern}\n` +
@@ -726,6 +819,89 @@ client.on('interactionCreate', async (interaction) => {
         }
       } catch (finalError) {
         console.error('Erro crítico ao responder interação:', finalError);
+      }
+    }
+  }
+
+  // ----------------------------------------------------------------------------
+  // COMANDO /view-configs
+  // ----------------------------------------------------------------------------
+  if (interaction.commandName === 'view-configs') {
+    try {
+      await interaction.deferReply();
+
+      const guildId = interaction.guildId;
+      let configsText = `**📋 Configurações do Servidor**\n\n`;
+
+      // Auto-Create Configs
+      const autoCreate = autoCreateConfigs.get(guildId);
+      if (autoCreate && Object.keys(autoCreate).length > 0) {
+        configsText += `**🤖 Auto-Create:**\n`;
+        for (const [event, config] of Object.entries(autoCreate)) {
+          const category = interaction.guild.channels.cache.get(config.categoryId);
+          const accessRole = config.accessRoleId ? interaction.guild.roles.cache.get(config.accessRoleId) : null;
+          
+          const eventName = {
+            'member_join': 'Novo Membro',
+            'role_create': 'Novo Cargo',
+            'server_boost': 'Novo Boost'
+          }[event] || event;
+
+          configsText += `• **${eventName}**: ${config.namePattern} em ${category?.name || 'Categoria não encontrada'}\n`;
+          configsText += `  - Privado: ${config.isPrivate ? 'Sim' : 'Não'}\n`;
+          if (accessRole) configsText += `  - Cargo de acesso: ${accessRole.name}\n`;
+        }
+        configsText += `\n`;
+      }
+
+      // Auto-Category-Clone Config
+      const categoryClone = autoCategoryCloneConfigs.get(guildId);
+      if (categoryClone) {
+        const categoryModel = interaction.guild.channels.cache.get(categoryClone.categoryModelId);
+        const accessRole = categoryClone.accessRoleId ? interaction.guild.roles.cache.get(categoryClone.accessRoleId) : null;
+        
+        configsText += `**📂 Auto-Create-Category-Clone:**\n`;
+        configsText += `• Categoria modelo: ${categoryModel?.name || 'Categoria não encontrada'}\n`;
+        if (categoryClone.prefix) configsText += `• Prefixo: ${categoryClone.prefix}\n`;
+        if (accessRole) configsText += `• Cargo adicional: ${accessRole.name}\n`;
+        configsText += `\n`;
+      }
+
+      // Auto-Role Config
+      const autoRole = autoRoleConfigs.get(guildId);
+      if (autoRole) {
+        const role = interaction.guild.roles.cache.get(autoRole.roleId);
+        configsText += `**🎯 Auto-Role:**\n`;
+        configsText += `• Cargo: ${role?.name || 'Cargo não encontrado'}\n\n`;
+      }
+
+      // Auto-Channel-Access Configs
+      const channelAccess = autoChannelAccessConfigs.get(guildId);
+      if (channelAccess && channelAccess.length > 0) {
+        configsText += `**🔑 Auto-Channel-Access:**\n`;
+        for (const config of channelAccess) {
+          const role = interaction.guild.roles.cache.get(config.roleId);
+          const category = config.categoryId ? interaction.guild.channels.cache.get(config.categoryId) : null;
+          
+          configsText += `• Padrão "${config.pattern}" → ${role?.name || 'Cargo não encontrado'}\n`;
+          if (category) configsText += `  - Categoria: ${category.name}\n`;
+        }
+        configsText += `\n`;
+      }
+
+      // Se não há configurações
+      if (configsText === `**📋 Configurações do Servidor**\n\n`) {
+        configsText += `Nenhuma configuração ativa encontrada para este servidor.`;
+      }
+
+      await interaction.editReply(configsText);
+
+    } catch (error) {
+      console.error('Erro ao visualizar configurações:', error);
+      if (interaction.deferred) {
+        await interaction.editReply('Ocorreu um erro ao visualizar as configurações.');
+      } else {
+        await interaction.reply('Ocorreu um erro ao visualizar as configurações.');
       }
     }
   }

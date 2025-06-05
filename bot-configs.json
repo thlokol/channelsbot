@@ -1,0 +1,22 @@
+{
+  "autoCreateConfigs": [],
+  "autoCategoryCloneConfigs": [
+    [
+      "1346235275654856724",
+      {
+        "categoryModelId": "1346235276124623028",
+        "categoryModelName": "modelo",
+        "prefix": ""
+      }
+    ]
+  ],
+  "autoChannelAccessConfigs": [],
+  "autoRoleConfigs": [
+    [
+      "1346235275654856724",
+      {
+        "roleId": "1346235275654856725"
+      }
+    ]
+  ]
+}
