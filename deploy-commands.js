@@ -371,6 +371,140 @@ const autoRoleCmd = new SlashCommandBuilder()
   );
 
 // =========================
+// COMANDO /auto-message
+// =========================
+const autoMessageCmd = new SlashCommandBuilder()
+  .setName('auto-message')
+  .setDescription('Configura mensagens automáticas para canais recém-criados usando templates')
+  .setDefaultMemberPermissions(PermissionFlagsBits.ManageChannels)
+  .setDMPermission(false)
+  // Opções obrigatórias primeiro
+  .addStringOption(option =>
+    option
+      .setName('tipo')
+      .setDescription('Tipo de criação de canal onde a mensagem será enviada')
+      .setRequired(true)
+      .addChoices(
+        { name: 'Auto-Create (Novo Membro)', value: 'auto_create_member' },
+        { name: 'Auto-Create (Novo Cargo)', value: 'auto_create_role' },
+        { name: 'Auto-Create (Novo Boost)', value: 'auto_create_boost' },
+        { name: 'Auto-Category-Clone', value: 'auto_category_clone' }
+      )
+  )
+  .addBooleanOption(option =>
+    option
+      .setName('ativar')
+      .setDescription('Ativar ou desativar as mensagens automáticas')
+      .setRequired(true)
+  )
+  // Depois as opções opcionais
+  .addStringOption(option =>
+    option
+      .setName('template')
+      .setDescription('ID do template a ser usado (use /list-templates para ver os disponíveis)')
+      .setRequired(false)
+  )
+  .addStringOption(option =>
+    option
+      .setName('canal_especifico')
+      .setDescription('Nome específico do canal onde enviar (deixe vazio para todos os canais criados)')
+      .setRequired(false)
+  )
+  .addStringOption(option =>
+    option
+      .setName('mensagem_simples')
+      .setDescription('Mensagem simples sem formatação (alternativa ao template)')
+      .setRequired(false)
+  );
+
+// =========================
+// COMANDO /create-template
+// =========================
+const createTemplateCmd = new SlashCommandBuilder()
+  .setName('create-template')
+  .setDescription('Cria um template de mensagem capturando uma mensagem enviada no chat')
+  .setDefaultMemberPermissions(PermissionFlagsBits.ManageChannels)
+  .setDMPermission(false)
+  .addStringOption(option =>
+    option
+      .setName('template_id')
+      .setDescription('ID único para o template (sem espaços, ex: meu-template)')
+      .setRequired(true)
+  )
+  .addStringOption(option =>
+    option
+      .setName('nome')
+      .setDescription('Nome descritivo do template')
+      .setRequired(true)
+  )
+  .addStringOption(option =>
+    option
+      .setName('message_id')
+      .setDescription('ID da mensagem que será usada como template (clique direito na mensagem > Copiar ID)')
+      .setRequired(true)
+  );
+
+// =========================
+// COMANDO /list-templates
+// =========================
+const listTemplatesCmd = new SlashCommandBuilder()
+  .setName('list-templates')
+  .setDescription('Lista todos os templates de mensagem disponíveis')
+  .setDefaultMemberPermissions(PermissionFlagsBits.ManageChannels)
+  .setDMPermission(false);
+
+// =========================
+// COMANDO /delete-template
+// =========================
+const deleteTemplateCmd = new SlashCommandBuilder()
+  .setName('delete-template')
+  .setDescription('Remove um template de mensagem')
+  .setDefaultMemberPermissions(PermissionFlagsBits.ManageChannels)
+  .setDMPermission(false)
+  .addStringOption(option =>
+    option
+      .setName('template_id')
+      .setDescription('ID do template a ser removido')
+      .setRequired(true)
+  );
+
+// =========================
+// COMANDO /preview-template
+// =========================
+const previewTemplateCmd = new SlashCommandBuilder()
+  .setName('preview-template')
+  .setDescription('Visualiza como ficará um template com os placeholders substituídos')
+  .setDefaultMemberPermissions(PermissionFlagsBits.ManageChannels)
+  .setDMPermission(false)
+  .addStringOption(option =>
+    option
+      .setName('template_id')
+      .setDescription('ID do template para visualizar')
+      .setRequired(true)
+  );
+
+// =========================
+// COMANDO /list-auto-messages
+// =========================
+const listAutoMessagesCmd = new SlashCommandBuilder()
+  .setName('list-auto-messages')
+  .setDescription('Lista todas as mensagens automáticas configuradas para um tipo específico')
+  .setDefaultMemberPermissions(PermissionFlagsBits.ManageChannels)
+  .setDMPermission(false)
+  .addStringOption(option =>
+    option
+      .setName('tipo')
+      .setDescription('Tipo de automação para listar as mensagens')
+      .setRequired(true)
+      .addChoices(
+        { name: 'Auto-Create (Novo Membro)', value: 'auto_create_member' },
+        { name: 'Auto-Create (Novo Cargo)', value: 'auto_create_role' },
+        { name: 'Auto-Create (Novo Boost)', value: 'auto_create_boost' },
+        { name: 'Auto-Category-Clone', value: 'auto_category_clone' }
+      )
+  );
+
+// =========================
 // COMANDO /view-configs
 // =========================
 const viewConfigsCmd = new SlashCommandBuilder()
@@ -382,7 +516,7 @@ const viewConfigsCmd = new SlashCommandBuilder()
 // =========================
 // REGISTRO GLOBAL
 // =========================
-const commands = [channelVisibleCmd, createCmd, deleteCategoryCmd, channelRenameCmd, cloneCategoryCmd, autoCreateCmd, autoCreateCategoryCloneCmd, autoChannelAccessCmd, autoRoleCmd, viewConfigsCmd];
+const commands = [channelVisibleCmd, createCmd, deleteCategoryCmd, channelRenameCmd, cloneCategoryCmd, autoCreateCmd, autoCreateCategoryCloneCmd, autoChannelAccessCmd, autoRoleCmd, autoMessageCmd, createTemplateCmd, listTemplatesCmd, deleteTemplateCmd, previewTemplateCmd, listAutoMessagesCmd, viewConfigsCmd];
 
 const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
 

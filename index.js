@@ -42,6 +42,18 @@ async function loadConfigs() {
       });
     }
     
+    if (configs.autoMessageConfigs) {
+      configs.autoMessageConfigs.forEach(([key, value]) => {
+        autoMessageConfigs.set(key, value);
+      });
+    }
+    
+    if (configs.messageTemplates) {
+      configs.messageTemplates.forEach(([key, value]) => {
+        messageTemplates.set(key, value);
+      });
+    }
+    
     console.log('Configurações carregadas com sucesso!');
   } catch (error) {
     if (error.code === 'ENOENT') {
@@ -61,6 +73,8 @@ async function saveConfigs() {
       autoCategoryCloneConfigs: Array.from(autoCategoryCloneConfigs.entries()),
       autoChannelAccessConfigs: Array.from(autoChannelAccessConfigs.entries()),
       autoRoleConfigs: Array.from(autoRoleConfigs.entries()),
+      autoMessageConfigs: Array.from(autoMessageConfigs.entries()),
+      messageTemplates: Array.from(messageTemplates.entries()),
     };
     
     await fs.writeFile(CONFIG_FILE, JSON.stringify(configs, null, 2));
@@ -68,6 +82,113 @@ async function saveConfigs() {
   } catch (error) {
     console.error('Erro ao salvar configurações:', error);
   }
+}
+
+// Função para enviar mensagem automática em um canal
+async function sendAutoMessage(channel, messageType, user = null) {
+  try {
+    const guildId = channel.guild.id;
+    const messageConfigs = autoMessageConfigs.get(guildId);
+    
+    if (!messageConfigs || !messageConfigs[messageType]) return;
+    
+    const configs = messageConfigs[messageType];
+    
+    // Encontra as configurações aplicáveis para este canal
+    const applicableConfigs = configs.filter(config => {
+      // Se não tem canal específico, aplica a todos
+      if (!config.canalEspecifico) return true;
+      
+      // Se tem canal específico, verifica se o nome do canal contém o padrão
+      return channel.name.includes(config.canalEspecifico);
+    });
+    
+    // Envia mensagens para cada configuração aplicável
+    for (const config of applicableConfigs) {
+      // Substitui placeholders na mensagem
+      let mensagem = config.mensagem;
+      if (user) {
+        mensagem = mensagem.replace(/{user}/g, `<@${user.id}>`);
+        mensagem = mensagem.replace(/{username}/g, user.username);
+        mensagem = mensagem.replace(/{tag}/g, user.tag);
+      }
+      
+      // Envia a mensagem com um pequeno delay para garantir que o canal foi criado
+      setTimeout(async () => {
+        try {
+          await channel.send(mensagem);
+          console.log(`Mensagem automática enviada no canal #${channel.name} (${messageType}): "${config.mensagem.substring(0, 50)}..."`);
+        } catch (error) {
+          console.error(`Erro ao enviar mensagem automática no canal #${channel.name}:`, error);
+        }
+      }, 1000); // Delay de 1 segundo
+    }
+    
+  } catch (error) {
+    console.error('Erro na função sendAutoMessage:', error);
+  }
+}
+
+// Função para inicializar templates padrão
+function initializeDefaultTemplates(guildId) {
+  const guildTemplates = messageTemplates.get(guildId) || {};
+  
+  // Templates padrão (só adiciona se não existir)
+  if (!guildTemplates['boas-vindas-basico']) {
+    guildTemplates['boas-vindas-basico'] = {
+      nome: 'Boas-vindas Básico',
+      conteudo: `🎉 **Bem-vindo(a), {user}!**
+
+Este é seu canal pessoal no servidor. Aqui você pode:
+• Conversar com a equipe
+• Compartilhar arquivos
+• Fazer perguntas
+
+Divirta-se! 😊`,
+      criadoPor: 'sistema',
+      datasCriacao: new Date().toISOString()
+    };
+  }
+  
+  if (!guildTemplates['boas-vindas-vip']) {
+    guildTemplates['boas-vindas-vip'] = {
+      nome: 'Boas-vindas VIP',
+      conteudo: `✨ **Bem-vindo(a) à área VIP, {user}!** ✨
+
+🌟 Você agora tem acesso aos benefícios exclusivos:
+🔹 Canais privados
+🔹 Suporte prioritário  
+🔹 Recursos especiais
+🔹 Comunidade exclusiva
+
+Aproveite sua experiência premium! 🚀`,
+      criadoPor: 'sistema',
+      dataCriacao: new Date().toISOString()
+    };
+  }
+  
+  if (!guildTemplates['canal-arquivos']) {
+    guildTemplates['canal-arquivos'] = {
+      nome: 'Canal de Arquivos',
+      conteudo: `📁 **Canal de Arquivos - {username}**
+
+Este canal é dedicado ao armazenamento de seus arquivos.
+
+**Regras de uso:**
+• Máximo 8MB por arquivo
+• Evite arquivos executáveis (.exe, .bat)
+• Organize com nomes descritivos
+• Faça backup regularmente
+
+**Formatos aceitos:** Imagens, documentos, vídeos, áudio
+
+Mantenha organizado! 📋`,
+      criadoPor: 'sistema',
+      dataCriacao: new Date().toISOString()
+    };
+  }
+  
+  messageTemplates.set(guildId, guildTemplates);
 }
 
 // Armazena as configurações de auto-create por servidor
@@ -81,6 +202,12 @@ const autoChannelAccessConfigs = new Map();
 
 // Armazena as configurações de auto-role por servidor
 const autoRoleConfigs = new Map();
+
+// Armazena as configurações de mensagens automáticas por servidor
+const autoMessageConfigs = new Map();
+
+// Armazena templates de mensagens por servidor
+const messageTemplates = new Map();
 
 const client = new Client({
   intents: [
@@ -824,6 +951,396 @@ client.on('interactionCreate', async (interaction) => {
   }
 
   // ----------------------------------------------------------------------------
+  // COMANDO /auto-message
+  // ----------------------------------------------------------------------------
+  if (interaction.commandName === 'auto-message') {
+    try {
+      await interaction.deferReply();
+
+      const tipo = interaction.options.getString('tipo');
+      const isEnabled = interaction.options.getBoolean('ativar');
+      const templateId = interaction.options.getString('template');
+      const mensagemSimples = interaction.options.getString('mensagem_simples');
+      const canalEspecifico = interaction.options.getString('canal_especifico');
+
+      // Inicializa templates padrão se necessário
+      initializeDefaultTemplates(interaction.guildId);
+
+      // Se estiver desativando
+      if (!isEnabled) {
+        const guildConfigs = autoMessageConfigs.get(interaction.guildId) || {};
+        
+        if (guildConfigs[tipo]) {
+          if (canalEspecifico) {
+            // Remove apenas a configuração para o canal específico
+            guildConfigs[tipo] = guildConfigs[tipo].filter(config => config.canalEspecifico !== canalEspecifico);
+            
+            if (guildConfigs[tipo].length === 0) {
+              delete guildConfigs[tipo];
+            }
+          } else {
+            // Remove todas as configurações do tipo
+            delete guildConfigs[tipo];
+          }
+        }
+        
+        if (Object.keys(guildConfigs).length === 0) {
+          autoMessageConfigs.delete(interaction.guildId);
+        } else {
+          autoMessageConfigs.set(interaction.guildId, guildConfigs);
+        }
+        
+        // Salva as configurações no arquivo
+        await saveConfigs();
+        
+        const tipoNome = {
+          'auto_create_member': 'Auto-Create (Novo Membro)',
+          'auto_create_role': 'Auto-Create (Novo Cargo)',
+          'auto_create_boost': 'Auto-Create (Novo Boost)',
+          'auto_category_clone': 'Auto-Category-Clone'
+        }[tipo];
+        
+        const canalTexto = canalEspecifico ? ` para o canal "${canalEspecifico}"` : '';
+        await interaction.editReply(`Mensagens automáticas para "${tipoNome}"${canalTexto} foram desativadas.`);
+        return;
+      }
+
+      // Verifica se template ou mensagem foi fornecida ao ativar
+      if (!templateId && !mensagemSimples) {
+        await interaction.editReply('Você precisa fornecer um `template` ou uma `mensagem_simples` ao ativar as mensagens automáticas.');
+        return;
+      }
+
+      // Verifica se o template existe (se fornecido)
+      let conteudoMensagem = mensagemSimples;
+      let isTemplate = false;
+      
+      if (templateId) {
+        const guildTemplates = messageTemplates.get(interaction.guildId) || {};
+        const template = guildTemplates[templateId];
+        
+        if (!template) {
+          await interaction.editReply(`Template "${templateId}" não encontrado. Use \`/list-templates\` para ver os disponíveis.`);
+          return;
+        }
+        
+        conteudoMensagem = template.conteudo;
+        isTemplate = true;
+      }
+
+      // Salva a configuração
+      const guildConfigs = autoMessageConfigs.get(interaction.guildId) || {};
+      
+      // Inicializa o array para o tipo se não existir
+      if (!guildConfigs[tipo]) {
+        guildConfigs[tipo] = [];
+      }
+      
+      // Verifica se já existe uma configuração para o mesmo canal específico
+      const existingConfigIndex = guildConfigs[tipo].findIndex(config => 
+        config.canalEspecifico === (canalEspecifico || null)
+      );
+      
+      const newConfig = {
+        mensagem: conteudoMensagem,
+        templateId: templateId || null,
+        isTemplate: isTemplate,
+        canalEspecifico: canalEspecifico || null
+      };
+      
+      if (existingConfigIndex >= 0) {
+        // Atualiza a configuração existente
+        guildConfigs[tipo][existingConfigIndex] = newConfig;
+      } else {
+        // Adiciona nova configuração
+        guildConfigs[tipo].push(newConfig);
+      }
+      
+      autoMessageConfigs.set(interaction.guildId, guildConfigs);
+      
+      // Salva as configurações no arquivo
+      await saveConfigs();
+
+      const tipoNome = {
+        'auto_create_member': 'Auto-Create (Novo Membro)',
+        'auto_create_role': 'Auto-Create (Novo Cargo)',
+        'auto_create_boost': 'Auto-Create (Novo Boost)',
+        'auto_category_clone': 'Auto-Category-Clone'
+      }[tipo];
+
+      const totalConfigs = guildConfigs[tipo].length;
+      const preview = conteudoMensagem.length > 100 ? conteudoMensagem.substring(0, 100) + '...' : conteudoMensagem;
+      
+      await interaction.editReply(
+        `Mensagem automática configurada para "${tipoNome}":\n\n` +
+        `**Fonte:** ${isTemplate ? `Template "${templateId}"` : 'Mensagem simples'}\n` +
+        `**Preview:** ${preview}\n` +
+        `**Canal específico:** ${canalEspecifico || 'Todos os canais criados'}\n\n` +
+        `Total de configurações para este tipo: ${totalConfigs}\n` +
+        `As mensagens serão enviadas automaticamente nos canais criados por esta automação.`
+      );
+
+    } catch (error) {
+      console.error('Erro ao configurar auto-message:', error);
+      if (interaction.deferred) {
+        await interaction.editReply('Ocorreu um erro ao configurar as mensagens automáticas.');
+      } else {
+        await interaction.reply('Ocorreu um erro ao configurar as mensagens automáticas.');
+      }
+    }
+  }
+
+  // ----------------------------------------------------------------------------
+  // COMANDO /create-template
+  // ----------------------------------------------------------------------------
+  if (interaction.commandName === 'create-template') {
+    try {
+      await interaction.deferReply();
+
+      const templateId = interaction.options.getString('template_id');
+      const nome = interaction.options.getString('nome');
+      const messageId = interaction.options.getString('message_id');
+
+      // Valida o ID do template (sem espaços, caracteres especiais)
+      if (!/^[a-zA-Z0-9-_]+$/.test(templateId)) {
+        await interaction.editReply('O ID do template deve conter apenas letras, números, traços (-) e underscores (_).');
+        return;
+      }
+
+      // Tenta buscar a mensagem
+      let message;
+      try {
+        message = await interaction.channel.messages.fetch(messageId);
+      } catch (error) {
+        await interaction.editReply('Mensagem não encontrada. Certifique-se de que o ID está correto e a mensagem está neste canal.');
+        return;
+      }
+
+      if (!message.content || message.content.trim() === '') {
+        await interaction.editReply('A mensagem selecionada não possui conteúdo de texto.');
+        return;
+      }
+
+      // Salva o template
+      const guildTemplates = messageTemplates.get(interaction.guildId) || {};
+      
+      guildTemplates[templateId] = {
+        nome: nome,
+        conteudo: message.content,
+        criadoPor: interaction.user.id,
+        dataCriacao: new Date().toISOString(),
+        autorOriginal: message.author.id
+      };
+
+      messageTemplates.set(interaction.guildId, guildTemplates);
+      await saveConfigs();
+
+      const preview = message.content.length > 200 ? message.content.substring(0, 200) + '...' : message.content;
+
+      await interaction.editReply(
+        `✅ **Template criado com sucesso!**\n\n` +
+        `**ID:** \`${templateId}\`\n` +
+        `**Nome:** ${nome}\n` +
+        `**Autor da mensagem:** <@${message.author.id}>\n\n` +
+        `**Preview:**\n${preview}\n\n` +
+        `Use \`/auto-message template:${templateId}\` para aplicar este template.`
+      );
+
+    } catch (error) {
+      console.error('Erro ao criar template:', error);
+      if (interaction.deferred) {
+        await interaction.editReply('Ocorreu um erro ao criar o template.');
+      } else {
+        await interaction.reply('Ocorreu um erro ao criar o template.');
+      }
+    }
+  }
+
+  // ----------------------------------------------------------------------------
+  // COMANDO /list-templates
+  // ----------------------------------------------------------------------------
+  if (interaction.commandName === 'list-templates') {
+    try {
+      await interaction.deferReply();
+
+      // Inicializa templates padrão se necessário
+      initializeDefaultTemplates(interaction.guildId);
+
+      const guildTemplates = messageTemplates.get(interaction.guildId) || {};
+      const templates = Object.entries(guildTemplates);
+
+      if (templates.length === 0) {
+        await interaction.editReply('Nenhum template encontrado para este servidor.');
+        return;
+      }
+
+      let responseText = `📝 **Templates de Mensagem Disponíveis**\n\n`;
+
+      templates.forEach(([id, template]) => {
+        const preview = template.conteudo.length > 80 ? 
+          template.conteudo.substring(0, 80) + '...' : 
+          template.conteudo;
+        
+        const tipo = template.criadoPor === 'sistema' ? '🔧 Sistema' : '👤 Personalizado';
+        
+        responseText += `**\`${id}\`** - ${template.nome} ${tipo}\n`;
+        responseText += `Preview: ${preview}\n\n`;
+      });
+
+      responseText += `\n*Use \`/preview-template template_id:[id]\` para ver o template completo*`;
+
+      await interaction.editReply(responseText);
+
+    } catch (error) {
+      console.error('Erro ao listar templates:', error);
+      if (interaction.deferred) {
+        await interaction.editReply('Ocorreu um erro ao listar os templates.');
+      } else {
+        await interaction.reply('Ocorreu um erro ao listar os templates.');
+      }
+    }
+  }
+
+  // ----------------------------------------------------------------------------
+  // COMANDO /delete-template
+  // ----------------------------------------------------------------------------
+  if (interaction.commandName === 'delete-template') {
+    try {
+      await interaction.deferReply();
+
+      const templateId = interaction.options.getString('template_id');
+      const guildTemplates = messageTemplates.get(interaction.guildId) || {};
+
+      if (!guildTemplates[templateId]) {
+        await interaction.editReply(`Template "${templateId}" não encontrado.`);
+        return;
+      }
+
+      const template = guildTemplates[templateId];
+
+      // Impede deletar templates do sistema
+      if (template.criadoPor === 'sistema') {
+        await interaction.editReply('Templates do sistema não podem ser removidos.');
+        return;
+      }
+
+      delete guildTemplates[templateId];
+      messageTemplates.set(interaction.guildId, guildTemplates);
+      await saveConfigs();
+
+      await interaction.editReply(`✅ Template "${templateId}" (${template.nome}) foi removido com sucesso.`);
+
+    } catch (error) {
+      console.error('Erro ao deletar template:', error);
+      if (interaction.deferred) {
+        await interaction.editReply('Ocorreu um erro ao deletar o template.');
+      } else {
+        await interaction.reply('Ocorreu um erro ao deletar o template.');
+      }
+    }
+  }
+
+  // ----------------------------------------------------------------------------
+  // COMANDO /preview-template
+  // ----------------------------------------------------------------------------
+  if (interaction.commandName === 'preview-template') {
+    try {
+      await interaction.deferReply();
+
+      const templateId = interaction.options.getString('template_id');
+      const guildTemplates = messageTemplates.get(interaction.guildId) || {};
+
+      if (!guildTemplates[templateId]) {
+        await interaction.editReply(`Template "${templateId}" não encontrado.`);
+        return;
+      }
+
+      const template = guildTemplates[templateId];
+      
+      // Substitui placeholders para preview
+      let preview = template.conteudo;
+      preview = preview.replace(/{user}/g, `@${interaction.user.username}`);
+      preview = preview.replace(/{username}/g, interaction.user.username);
+      preview = preview.replace(/{tag}/g, interaction.user.tag);
+
+      const tipo = template.criadoPor === 'sistema' ? '🔧 Sistema' : '👤 Personalizado';
+
+      await interaction.editReply(
+        `📝 **Preview do Template "${templateId}"**\n\n` +
+        `**Nome:** ${template.nome} ${tipo}\n` +
+        `**Criado:** ${new Date(template.dataCriacao).toLocaleDateString('pt-BR')}\n\n` +
+        `**Como ficará a mensagem:**\n\n${preview}`
+      );
+
+    } catch (error) {
+      console.error('Erro ao visualizar template:', error);
+      if (interaction.deferred) {
+        await interaction.editReply('Ocorreu um erro ao visualizar o template.');
+      } else {
+        await interaction.reply('Ocorreu um erro ao visualizar o template.');
+      }
+    }
+  }
+
+  // ----------------------------------------------------------------------------
+  // COMANDO /list-auto-messages
+  // ----------------------------------------------------------------------------
+  if (interaction.commandName === 'list-auto-messages') {
+    try {
+      await interaction.deferReply();
+
+      const tipo = interaction.options.getString('tipo');
+      const guildId = interaction.guildId;
+      
+      const messageConfigs = autoMessageConfigs.get(guildId);
+      const tipoNome = {
+        'auto_create_member': 'Auto-Create (Novo Membro)',
+        'auto_create_role': 'Auto-Create (Novo Cargo)',
+        'auto_create_boost': 'Auto-Create (Novo Boost)',
+        'auto_category_clone': 'Auto-Category-Clone'
+      }[tipo];
+
+      if (!messageConfigs || !messageConfigs[tipo] || messageConfigs[tipo].length === 0) {
+        await interaction.editReply(`Nenhuma mensagem automática configurada para "${tipoNome}".`);
+        return;
+      }
+
+      const configs = messageConfigs[tipo];
+      let responseText = `**💬 Mensagens Automáticas - ${tipoNome}**\n\n`;
+      responseText += `Total: ${configs.length} configuração${configs.length > 1 ? 'ões' : ''}\n\n`;
+
+      configs.forEach((config, index) => {
+        responseText += `**${index + 1}.** Canal: ${config.canalEspecifico || 'Todos os canais'}\n`;
+        
+        if (config.isTemplate && config.templateId) {
+          responseText += `**Fonte:** Template \`${config.templateId}\`\n`;
+        } else {
+          responseText += `**Fonte:** Mensagem simples\n`;
+        }
+        
+        const preview = config.mensagem.length > 150 ? 
+          config.mensagem.substring(0, 150) + '...' : 
+          config.mensagem;
+        
+        responseText += `**Preview:** ${preview}\n\n`;
+      });
+
+      responseText += `\n*Para desativar uma configuração específica, use:*\n`;
+      responseText += `\`/auto-message tipo:${tipoNome} ativar:False canal_especifico:[nome_do_canal]\``;
+
+      await interaction.editReply(responseText);
+
+    } catch (error) {
+      console.error('Erro ao listar auto-messages:', error);
+      if (interaction.deferred) {
+        await interaction.editReply('Ocorreu um erro ao listar as mensagens automáticas.');
+      } else {
+        await interaction.reply('Ocorreu um erro ao listar as mensagens automáticas.');
+      }
+    }
+  }
+
+  // ----------------------------------------------------------------------------
   // COMANDO /view-configs
   // ----------------------------------------------------------------------------
   if (interaction.commandName === 'view-configs') {
@@ -885,6 +1402,36 @@ client.on('interactionCreate', async (interaction) => {
           
           configsText += `• Padrão "${config.pattern}" → ${role?.name || 'Cargo não encontrado'}\n`;
           if (category) configsText += `  - Categoria: ${category.name}\n`;
+        }
+        configsText += `\n`;
+      }
+
+      // Auto-Message Configs
+      const autoMessage = autoMessageConfigs.get(guildId);
+      if (autoMessage && Object.keys(autoMessage).length > 0) {
+        configsText += `**💬 Auto-Message:**\n`;
+        for (const [tipo, configs] of Object.entries(autoMessage)) {
+          const tipoNome = {
+            'auto_create_member': 'Auto-Create (Novo Membro)',
+            'auto_create_role': 'Auto-Create (Novo Cargo)',
+            'auto_create_boost': 'Auto-Create (Novo Boost)',
+            'auto_category_clone': 'Auto-Category-Clone'
+          }[tipo] || tipo;
+
+          configsText += `• **${tipoNome}** (${configs.length} configuração${configs.length > 1 ? 'ões' : ''}):\n`;
+          
+          configs.forEach((config, index) => {
+            const mensagemCurta = config.mensagem.length > 50 ? 
+              config.mensagem.substring(0, 50) + '...' : 
+              config.mensagem;
+            
+            configsText += `  ${index + 1}. "${mensagemCurta}"\n`;
+            if (config.canalEspecifico) {
+              configsText += `     - Canal específico: ${config.canalEspecifico}\n`;
+            } else {
+              configsText += `     - Para todos os canais criados\n`;
+            }
+          });
         }
         configsText += `\n`;
       }
@@ -964,12 +1511,15 @@ client.on('guildMemberAdd', async (member) => {
         .replace('{name}', member.user.username.toLowerCase())
         .replace('{n}', counter.toString());
 
-      await member.guild.channels.create({
+      const newChannel = await member.guild.channels.create({
         name: channelName,
         type: ChannelType.GuildText,
         parent: config.categoryId,
         permissionOverwrites,
       });
+
+      // Envia mensagem automática se configurada
+      await sendAutoMessage(newChannel, 'auto_create_member', member.user);
     }
 
     // Verifica configuração de auto-create-category-clone
@@ -1085,7 +1635,7 @@ client.on('guildMemberAdd', async (member) => {
           }
         }
         
-        await member.guild.channels.create({
+        const newChannel = await member.guild.channels.create({
           name: channel.name,
           type: channel.type,
           topic: channel.topic,
@@ -1093,6 +1643,9 @@ client.on('guildMemberAdd', async (member) => {
           parent: newCategory.id,
           permissionOverwrites: channelPermissionOverwrites
         });
+
+        // Envia mensagem automática se configurada
+        await sendAutoMessage(newChannel, 'auto_category_clone', member.user);
       }
 
       console.log(`Categoria "${categoryName}" criada para o membro ${member.user.tag} com ${channelsInModel.size} canais.`);
@@ -1143,12 +1696,15 @@ client.on('roleCreate', async (role) => {
       .replace('{name}', role.name.toLowerCase())
       .replace('{n}', counter.toString());
 
-    await role.guild.channels.create({
+    const newChannel = await role.guild.channels.create({
       name: channelName,
       type: ChannelType.GuildText,
       parent: config.categoryId,
       permissionOverwrites,
     });
+
+    // Envia mensagem automática se configurada
+    await sendAutoMessage(newChannel, 'auto_create_role');
 
   } catch (error) {
     console.error('Erro ao criar canal automático para novo cargo:', error);
@@ -1200,12 +1756,15 @@ client.on('guildMemberUpdate', async (oldMember, newMember) => {
       .replace('{name}', newMember.user.username.toLowerCase())
       .replace('{n}', counter.toString());
 
-    await newMember.guild.channels.create({
+    const newChannel = await newMember.guild.channels.create({
       name: channelName,
       type: ChannelType.GuildText,
       parent: config.categoryId,
       permissionOverwrites,
     });
+
+    // Envia mensagem automática se configurada
+    await sendAutoMessage(newChannel, 'auto_create_boost', newMember.user);
 
   } catch (error) {
     console.error('Erro ao criar canal automático para novo boost:', error);

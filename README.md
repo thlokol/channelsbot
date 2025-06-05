@@ -15,6 +15,8 @@ Um bot Discord para gerenciamento automatizado de canais, categorias e permissõ
 - **Auto-Category-Clone**: Clonagem automática de categorias para novos membros
 - **Auto-Role**: Atribuição automática de cargos para novos membros
 - **Auto-Channel-Access**: Concessão automática de permissões baseada em padrões de nomes
+- **Auto-Message**: Envio automático de mensagens com formatação avançada usando templates
+- **Sistema de Templates**: Criação e gerenciamento de templates de mensagem reutilizáveis
 
 ### 💾 Sistema de Persistência
 - **Configurações Permanentes**: Todas as configurações são mantidas após reiniciar o bot
@@ -177,6 +179,79 @@ Configura acesso automático a canais baseado em padrões de nome.
 /auto-channel-access padrao_nome:suporte cargo:@Staff ativar:True categoria:Atendimento
 ```
 
+#### `/auto-message`
+Configura mensagens automáticas para canais recém-criados usando **templates com formatação avançada** ou mensagens simples.
+
+**Parâmetros:**
+- `tipo` (obrigatório): Tipo de automação (Auto-Create Membro/Cargo/Boost ou Auto-Category-Clone)
+- `ativar` (obrigatório): Ativar ou desativar as mensagens
+- `template` (opcional): ID do template com formatação avançada
+- `mensagem_simples` (opcional): Mensagem simples sem formatação especial
+- `canal_especifico` (opcional): Nome específico do canal onde enviar
+
+**Placeholders disponíveis:**
+- `{user}`: Menciona o usuário (@usuário)
+- `{username}`: Nome do usuário sem menção
+- `{tag}`: Tag completa do usuário (usuário#1234)
+
+**Exemplos:**
+```bash
+# Usando template pré-definido
+/auto-message tipo:Auto-Create (Novo Membro) ativar:True template:boas-vindas-basico
+
+# Usando template personalizado para canal específico
+/auto-message tipo:Auto-Create (Novo Membro) ativar:True template:meu-template canal_especifico:vip
+
+# Usando mensagem simples
+/auto-message tipo:Auto-Create (Novo Membro) ativar:True mensagem_simples:Bem-vindo {user}!
+```
+
+### 🎨 Gerenciamento de Templates
+
+#### Templates Pré-definidos
+
+O bot inclui templates padrão com formatação profissional:
+
+- **`boas-vindas-basico`**: Mensagem de boas-vindas geral
+- **`boas-vindas-vip`**: Mensagem especial para áreas VIP/premium  
+- **`canal-arquivos`**: Instruções para canais de arquivos
+
+#### `/list-templates`
+Lista todos os templates disponíveis (padrão do sistema + personalizados).
+
+#### `/preview-template`
+Visualiza como ficará um template com os placeholders substituídos.
+
+**Parâmetros:**
+- `template_id` (obrigatório): ID do template para visualizar
+
+#### `/create-template`
+Cria um template personalizado capturando uma mensagem do chat.
+
+**Parâmetros:**
+- `template_id` (obrigatório): ID único (sem espaços, ex: meu-template)
+- `nome` (obrigatório): Nome descritivo
+- `message_id` (obrigatório): ID da mensagem a ser usada como template
+
+**Como usar:**
+1. Digite e envie uma mensagem formatada no chat
+2. Clique direito na mensagem → "Copiar ID da mensagem"
+3. Use o comando com o ID copiado
+
+**Exemplo:**
+```bash
+/create-template template_id:boas-vindas-personalizado nome:Boas-vindas Personalizado message_id:1234567890123456789
+```
+
+#### `/delete-template`
+Remove um template personalizado (templates do sistema não podem ser removidos).
+
+#### `/list-auto-messages`
+Lista todas as mensagens automáticas configuradas para um tipo específico.
+
+**Parâmetros:**
+- `tipo` (obrigatório): Tipo de automação para listar
+
 ### 📊 Visualização
 
 #### `/view-configs`
@@ -224,13 +299,41 @@ O arquivo `bot-configs.json` é criado automaticamente e contém todas as config
       "prefix": "Área de "
     }]
   ],
-  "autoChannelAccessConfigs": [
-    ["123456789", [{
-      "pattern": "suporte",
-      "roleId": "555555555",
-      "categoryId": null
-    }]]
-  ]
+     "autoChannelAccessConfigs": [
+     ["123456789", [{
+       "pattern": "suporte",
+       "roleId": "555555555",
+       "categoryId": null
+     }]]
+   ],
+   "autoMessageConfigs": [
+     ["123456789", {
+       "auto_create_member": [
+         {
+           "mensagem": "🎉 Bem-vindo(a), @usuario!\n\nEste é seu canal pessoal...",
+           "templateId": "boas-vindas-basico",
+           "isTemplate": true,
+           "canalEspecifico": null
+         },
+         {
+           "mensagem": "✨ Bem-vindo(a) à área VIP, @usuario! ✨\n\n🌟 Você agora tem acesso...",
+           "templateId": "boas-vindas-vip", 
+           "isTemplate": true,
+           "canalEspecifico": "vip"
+         }
+       ]
+     }]
+   ],
+   "messageTemplates": [
+     ["123456789", {
+       "boas-vindas-basico": {
+         "nome": "Boas-vindas Básico",
+         "conteudo": "🎉 **Bem-vindo(a), {user}!**\n\nEste é seu canal pessoal...",
+         "criadoPor": "sistema",
+         "dataCriacao": "2024-01-01T00:00:00.000Z"
+       }
+     }]
+   ]
 }
 ```
 
