@@ -4,3 +4,5 @@ node_modules/
 # Ignora o arquivo .env
 .env
 
+# Ignora o arquivo bot-configs.json
+bot-configs.json
